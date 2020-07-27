@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -17,6 +18,10 @@ type Pkcs11URI struct {
 	// have to be in the query or in the path part, so we use two maps
 	pathAttributes  map[string]string
 	queryAttributes map[string]string
+	// directories to search for pkcs11 modules
+	moduleDirectories []string
+	// file paths of allowed pkcs11 modules
+	allowedModulePaths []string
 }
 
 // upper character hex digits needed for pct-encoding
@@ -266,4 +271,101 @@ func (uri *Pkcs11URI) Format() (string, error) {
 		result += "?" + formatAttributes(uri.queryAttributes, false)
 	}
 	return result, nil
+}
+
+// SetModuleDirectories sets the search directories for pkcs11 modules
+func (uri *Pkcs11URI) SetModuleDirectories(moduleDirectories []string) {
+	uri.moduleDirectories = moduleDirectories
+}
+
+// GetModuleDirectories gets the search directories for pkcs11 modules
+func (uri *Pkcs11URI) GetModuleDirectories() []string {
+	return uri.moduleDirectories
+}
+
+// SetAllowedModulePaths sets allowed module paths to restrict access to modules. By
+// default no filtering is done.
+// Directory entries must end with a '/', all other ones are assumed to be file entries.
+// Allowed modules are filtered by string matching.
+func (uri *Pkcs11URI) SetAllowedModulePaths(allowedModulePaths []string) {
+	uri.allowedModulePaths = allowedModulePaths
+}
+
+func (uri *Pkcs11URI) isAllowedPath(path string) bool {
+	if len(uri.allowedModulePaths) == 0 {
+		return true
+	}
+	for _, allowedPath := range uri.allowedModulePaths {
+		if allowedPath == path {
+			// exact filename match
+			return true
+		}
+		if allowedPath[len(allowedPath)-1] == '/' && strings.HasPrefix(path, allowedPath) {
+			// allowedPath no subdirectory is allowed
+			idx := strings.IndexRune(path[len(allowedPath):], os.PathSeparator)
+			if idx < 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetModule returns the module to use, an empty string if no module was specified in the URI
+// First the module-path is checked for whether it holds an absolute that can be read
+// by the current user. If this is the case the module is returned. Otherwise either the module-path
+// is used or the user-provided module path is used to match a module containing what is set in the
+// attribute module-name.
+func (uri *Pkcs11URI) GetModule() (string, error) {
+	var searchdirs []string
+	v, ok := uri.queryAttributes["module-path"]
+
+	if ok {
+		info, err := os.Stat(v)
+		if err != nil {
+			return "", fmt.Errorf("module-path '%s' is not accessible", v)
+		}
+		if err == nil && info.Mode().IsRegular() && uri.isAllowedPath(v) {
+			// it's a file
+			return v, nil
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("module-path '%s' points to an invalid file type", v)
+		}
+		// v is a directory
+		searchdirs = append(uri.GetModuleDirectories(), v)
+	} else {
+		searchdirs = uri.GetModuleDirectories()
+	}
+
+	moduleName, ok := uri.queryAttributes["module-name"]
+	if !ok {
+		return "", fmt.Errorf("module-name attribute is not set")
+	}
+	moduleName = strings.ToLower(moduleName)
+
+	for _, dir := range searchdirs {
+		files, err := ioutil.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, file := range files {
+			fileLower := strings.ToLower(file.Name())
+
+			i := strings.Index(fileLower, moduleName)
+			if i < 0 {
+				continue
+			}
+			// we require that the fileLower ends with moduleName or that
+			// a suffix follows so that softhsm will not match libsofthsm2.so but only
+			// libsofthsm.so
+			if len(fileLower) == i+len(moduleName) || fileLower[i+len(moduleName)] == '.' {
+				f := filepath.Join(dir, file.Name())
+				if uri.isAllowedPath(f) {
+					return f, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("No module could be found")
 }

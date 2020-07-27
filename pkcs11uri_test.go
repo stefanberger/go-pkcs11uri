@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+var modulePaths = []string{
+	"/usr/lib64/pkcs11/", // Fedora
+	"/usr/lib/softhsm/",  // Ubuntu
+}
+
 func TestParse1(t *testing.T) {
 	uri, err := New()
 	if err != nil {
@@ -210,5 +215,56 @@ func TestValidateEscapedAttrs(t *testing.T) {
 		if v != data[2] {
 			t.Fatalf("Got unexpected attribute value '%s'; expected '%s'", v, data[2])
 		}
+	}
+}
+
+// This test requires SoftHSM to be installed, will warn otherwise
+func TestGetModule(t *testing.T) {
+	uri, err := New()
+	if err != nil {
+		t.Fatalf("Could not create a Pkcs11URI object")
+		return
+	}
+	uri.SetModuleDirectories(modulePaths)
+
+	uristring := "pkcs11:?module-name=softhsm2"
+	err = uri.Parse(uristring)
+	if err != nil {
+		t.Fatalf("Could not parse pkcs11 URI '%s': %s", uristring, err)
+	}
+
+	_, err = uri.GetModule()
+	if err != nil {
+		t.Skipf("Is softhsm2 not installed? GetModule() failed: %s", err)
+	}
+}
+
+// This test requires SoftHSM to be installed, will warn otherwise
+func TestGetModuleRestricted(t *testing.T) {
+	uri, err := New()
+	if err != nil {
+		t.Fatalf("Could not create a Pkcs11URI object")
+		return
+	}
+	uri.SetModuleDirectories(modulePaths)
+
+	uristring := "pkcs11:?module-name=softhsm2"
+	err = uri.Parse(uristring)
+	if err != nil {
+		t.Fatalf("Could not parse pkcs11 URI '%s': %s", uristring, err)
+	}
+
+	// we don't want any results
+	uri.SetAllowedModulePaths([]string{"/usr"})
+	_, err = uri.GetModule()
+	if err == nil {
+		t.Errorf("GetModule() must fail due to allowed file paths: %s", err)
+	}
+
+	// this time we want module paths
+	uri.SetAllowedModulePaths(modulePaths)
+	_, err = uri.GetModule()
+	if err != nil {
+		t.Skipf("Is softhsm2 not installed? GetModule() failed: %s", err)
 	}
 }
