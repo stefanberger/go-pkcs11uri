@@ -103,7 +103,7 @@ func New() (Pkcs11URI, error) {
 	}, nil
 }
 
-func (uri *Pkcs11URI) addAttribute(attrMap map[string]string, name, value string) error {
+func (uri *Pkcs11URI) setAttribute(attrMap map[string]string, name, value string) error {
 	v, err := url.QueryUnescape(value)
 	if err != nil {
 		return err
@@ -112,18 +112,25 @@ func (uri *Pkcs11URI) addAttribute(attrMap map[string]string, name, value string
 	return nil
 }
 
-// GetPathAttribute returns the value of a path attribute
+// GetPathAttribute returns the value of a path attribute in unescaped form
 func (uri *Pkcs11URI) GetPathAttribute(name string) (string, bool) {
 	v, ok := uri.pathAttributes[name]
 	return v, ok
 }
 
-// AddPathAttribute adds a path attribute
+// SetPathAttribute sets the value for a path attribute; this function may return an error
+// if the given value cannot be pct-unescaped
+func (uri *Pkcs11URI) SetPathAttribute(name, value string) error {
+	return uri.setAttribute(uri.pathAttributes, name, value)
+}
+
+// AddPathAttribute adds a path attribute; it returns an error if an attribute with the same
+// name already existed or if the given value cannot be pct-unescaped
 func (uri *Pkcs11URI) AddPathAttribute(name, value string) error {
 	if _, ok := uri.pathAttributes[name]; ok {
 		return errors.New("duplicate path attribute")
 	}
-	return uri.addAttribute(uri.pathAttributes, name, value)
+	return uri.SetPathAttribute(name, value)
 }
 
 // RemovePathAttribute removes a path attribute
@@ -131,18 +138,25 @@ func (uri *Pkcs11URI) RemovePathAttribute(name string) {
 	delete(uri.pathAttributes, name)
 }
 
-// GetQueryAttribute returns the value of a query attribute
+// GetQueryAttribute returns the value of a query attribute in unescaped form
 func (uri *Pkcs11URI) GetQueryAttribute(name string) (string, bool) {
 	v, ok := uri.queryAttributes[name]
 	return v, ok
 }
 
-// AddQueryAttribute adds a query attribute
+// SetQueryAttribute sets the value for a query attribute; this function may return an error
+// if the given value cannot pct-unescaped
+func (uri *Pkcs11URI) SetQueryAttribute(name, value string) error {
+	return uri.setAttribute(uri.queryAttributes, name, value)
+}
+
+// AddQueryAttribute adds a query attribute; it returns an error if an attribute with the same
+// name already existed or if the given value cannot be pct-unescaped
 func (uri *Pkcs11URI) AddQueryAttribute(name, value string) error {
 	if _, ok := uri.queryAttributes[name]; ok {
 		return errors.New("duplicate query attribute")
 	}
-	return uri.addAttribute(uri.queryAttributes, name, value)
+	return uri.SetQueryAttribute(name, value)
 }
 
 // RemoveQueryAttribute removes a path attribute
