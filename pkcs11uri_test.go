@@ -85,12 +85,21 @@ func TestConstruct1(t *testing.T) {
 		t.Fatalf("Could not create a Pkcs11URI object")
 	}
 	expecteduri := "pkcs11:id=%66%6F%6F"
-	uri.AddPathAttribute("id", "%66oo")
+
+	err = uri.AddPathAttribute("id", "%66oo")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+
 	verifyURI(t, uri, expecteduri)
 
 	expectedpin := "1234"
 	expecteduri += fmt.Sprintf("?pin-value=%s", expectedpin)
-	uri.AddQueryAttribute("pin-value", expectedpin)
+
+	err = uri.AddQueryAttribute("pin-value", expectedpin)
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
@@ -123,15 +132,25 @@ func TestPinSource(t *testing.T) {
 	defer os.Remove(tmpfile.Name())
 
 	expecteduri := "pkcs11:id=%66%6F%6F?pin-source=file:" + tmpfile.Name()
-	uri.AddPathAttribute("id", "foo")
-	uri.AddQueryAttribute("pin-source", "file:"+tmpfile.Name())
+	err = uri.AddPathAttribute("id", "foo")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	err = uri.AddQueryAttribute("pin-source", "file:"+tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
 
-	expecteduri = "pkcs11:id=%66%6F%6F?pin-source=file:" + tmpfile.Name()
-	uri.AddPathAttribute("id", "foo")
-	uri.AddQueryAttribute("pin-source", tmpfile.Name())
+	expecteduri = "pkcs11:id=%66%6F%6F?pin-source=" + tmpfile.Name()
+
+	uri.RemoveQueryAttribute("pin-source")
+	err = uri.AddQueryAttribute("pin-source", tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
@@ -145,7 +164,11 @@ func TestBadInput(t *testing.T) {
 	}
 
 	for _, entry := range [][]string{{"slot-id", "foo"}, {"library-version", "foo"}, {"library-version", "1.bar"}, {"type", "fobbar"}} {
-		uri.AddPathAttribute(entry[0], entry[1])
+		err = uri.AddPathAttribute(entry[0], entry[1])
+		if err != nil {
+			t.Fatalf("Could not add path attribute: %s", err)
+		}
+
 		if err := uri.Validate(); err == nil {
 			t.Fatalf("uri validation should have failed due to malformed %s value '%s'", entry[0], entry[1])
 		}
@@ -161,10 +184,15 @@ func TestGoodInput(t *testing.T) {
 	}
 
 	for _, entry := range [][]string{{"slot-id", "1"}, {"library-version", "7"}, {"library-version", "1.8"}, {"type", "public"}} {
-		uri.AddPathAttribute(entry[0], entry[1])
+		err = uri.AddPathAttribute(entry[0], entry[1])
+		if err != nil {
+			t.Fatalf("Could not add path attribute: %s", err)
+		}
+
 		if err := uri.Validate(); err != nil {
 			t.Fatalf("uri validation should have succeeded for %s value '%s': %s", entry[0], entry[1], err)
 		}
+		uri.RemovePathAttribute(entry[0])
 	}
 }
 
