@@ -1,11 +1,29 @@
+/*
+   (c) Copyright IBM Corporation, 2020
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package pkcs11uri
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,6 +40,10 @@ type Pkcs11URI struct {
 	moduleDirectories []string
 	// file paths of allowed pkcs11 modules
 	allowedModulePaths []string
+	// whether GetPIN() is allowed to execute an (arbitrary) program via "|<absolute commmand path>"
+	enableGetPINCommand bool
+	// file paths of allowed PIN commands
+	allowedPINCommandPaths []string
 }
 
 // upper character hex digits needed for pct-encoding
@@ -170,12 +192,48 @@ func (uri *Pkcs11URI) Validate() error {
 	return nil
 }
 
+// runGetPINCommand executes the command described by cmdstring after checking whether
+// the user enabled PIN Commands, whether the command has an absolute path, and whether
+// the command is allowed to run following the policy.
+func (uri *Pkcs11URI) runGetPINCommand(cmdstring string) (string, error) {
+	if !uri.enableGetPINCommand {
+		return "", fmt.Errorf("Running PIN command is disabled")
+	}
+	if !filepath.IsAbs(cmdstring) {
+		return "", fmt.Errorf("PIN command '%s' is not an absolute path", cmdstring)
+	}
+	if !uri.isAllowedPath(cmdstring, uri.allowedPINCommandPaths) {
+		return "", fmt.Errorf("PIN command '%s' is not allowed to run", cmdstring)
+	}
+
+	cmd := exec.Command(cmdstring)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	return out.String(), nil
+}
+
+// SetEnableGetPINCommand enables or disable the execution of a command to get the PIN.
+// The 2nd parameter allows to set a list of directories (entries must and in os.PathSeparator)
+// and files from where PIN commands are allowed to run. Running PIN commands is disabled
+// by default.
+func (uri *Pkcs11URI) SetEnableGetPINCommand(enable bool, allowedPINCommandPaths []string) {
+	uri.enableGetPINCommand = enable
+	uri.allowedPINCommandPaths = allowedPINCommandPaths
+}
+
 // GetPIN gets the PIN from either the pin-value or pin-source attribute
 func (uri *Pkcs11URI) GetPIN() (string, error) {
 	if v, ok := uri.queryAttributes["pin-value"]; ok {
 		return v, nil
 	}
 	if v, ok := uri.queryAttributes["pin-source"]; ok {
+		if v[0] == '|' {
+			return uri.runGetPINCommand(v[1:])
+		}
 		pinuri, err := url.ParseRequestURI(v)
 		if err != nil {
 			return "", fmt.Errorf("Could not parse pin-source: %s ", err)
@@ -291,11 +349,11 @@ func (uri *Pkcs11URI) SetAllowedModulePaths(allowedModulePaths []string) {
 	uri.allowedModulePaths = allowedModulePaths
 }
 
-func (uri *Pkcs11URI) isAllowedPath(path string) bool {
-	if len(uri.allowedModulePaths) == 0 {
+func (uri *Pkcs11URI) isAllowedPath(path string, allowedPaths []string) bool {
+	if len(allowedPaths) == 0 {
 		return true
 	}
-	for _, allowedPath := range uri.allowedModulePaths {
+	for _, allowedPath := range allowedPaths {
 		if allowedPath == path {
 			// exact filename match
 			return true
@@ -311,7 +369,7 @@ func (uri *Pkcs11URI) isAllowedPath(path string) bool {
 	return false
 }
 
-// GetModule returns the module to use, an empty string if no module was specified in the URI
+// GetModule returns the module to use or an error in case no module could be found.
 // First the module-path is checked for whether it holds an absolute that can be read
 // by the current user. If this is the case the module is returned. Otherwise either the module-path
 // is used or the user-provided module path is used to match a module containing what is set in the
@@ -325,7 +383,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("module-path '%s' is not accessible", v)
 		}
-		if err == nil && info.Mode().IsRegular() && uri.isAllowedPath(v) {
+		if err == nil && info.Mode().IsRegular() && uri.isAllowedPath(v, uri.allowedModulePaths) {
 			// it's a file
 			return v, nil
 		}
@@ -333,7 +391,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 			return "", fmt.Errorf("module-path '%s' points to an invalid file type", v)
 		}
 		// v is a directory
-		searchdirs = append(uri.GetModuleDirectories(), v)
+		searchdirs = []string{v}
 	} else {
 		searchdirs = uri.GetModuleDirectories()
 	}
@@ -361,7 +419,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 			// libsofthsm.so
 			if len(fileLower) == i+len(moduleName) || fileLower[i+len(moduleName)] == '.' {
 				f := filepath.Join(dir, file.Name())
-				if uri.isAllowedPath(f) {
+				if uri.isAllowedPath(f, uri.allowedModulePaths) {
 					return f, nil
 				}
 			}

@@ -1,9 +1,26 @@
+/*
+   (c) Copyright IBM Corporation, 2020
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package pkcs11uri
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"testing"
 )
 
@@ -68,18 +85,27 @@ func TestConstruct1(t *testing.T) {
 		t.Fatalf("Could not create a Pkcs11URI object")
 	}
 	expecteduri := "pkcs11:id=%66%6F%6F"
-	uri.AddPathAttribute("id", "%66oo")
+
+	err = uri.AddPathAttribute("id", "%66oo")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+
 	verifyURI(t, uri, expecteduri)
 
 	expectedpin := "1234"
 	expecteduri += fmt.Sprintf("?pin-value=%s", expectedpin)
-	uri.AddQueryAttribute("pin-value", expectedpin)
+
+	err = uri.AddQueryAttribute("pin-value", expectedpin)
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
 }
 
-func writePinfile(t *testing.T, value string) *os.File {
+func writeTempfile(t *testing.T, value string) *os.File {
 	tmpfile, err := ioutil.TempFile("", "mypin")
 	if err != nil {
 		t.Fatalf("Coult not create temporary file: %s", err)
@@ -102,19 +128,29 @@ func TestPinSource(t *testing.T) {
 
 	expectedpin := "4321"
 
-	tmpfile := writePinfile(t, expectedpin)
+	tmpfile := writeTempfile(t, expectedpin)
 	defer os.Remove(tmpfile.Name())
 
 	expecteduri := "pkcs11:id=%66%6F%6F?pin-source=file:" + tmpfile.Name()
-	uri.AddPathAttribute("id", "foo")
-	uri.AddQueryAttribute("pin-source", "file:"+tmpfile.Name())
+	err = uri.AddPathAttribute("id", "foo")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	err = uri.AddQueryAttribute("pin-source", "file:"+tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
 
-	expecteduri = "pkcs11:id=%66%6F%6F?pin-source=file:" + tmpfile.Name()
-	uri.AddPathAttribute("id", "foo")
-	uri.AddQueryAttribute("pin-source", tmpfile.Name())
+	expecteduri = "pkcs11:id=%66%6F%6F?pin-source=" + tmpfile.Name()
+
+	uri.RemoveQueryAttribute("pin-source")
+	err = uri.AddQueryAttribute("pin-source", tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Could not add query attribute: %s", err)
+	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
@@ -128,7 +164,11 @@ func TestBadInput(t *testing.T) {
 	}
 
 	for _, entry := range [][]string{{"slot-id", "foo"}, {"library-version", "foo"}, {"library-version", "1.bar"}, {"type", "fobbar"}} {
-		uri.AddPathAttribute(entry[0], entry[1])
+		err = uri.AddPathAttribute(entry[0], entry[1])
+		if err != nil {
+			t.Fatalf("Could not add path attribute: %s", err)
+		}
+
 		if err := uri.Validate(); err == nil {
 			t.Fatalf("uri validation should have failed due to malformed %s value '%s'", entry[0], entry[1])
 		}
@@ -144,10 +184,15 @@ func TestGoodInput(t *testing.T) {
 	}
 
 	for _, entry := range [][]string{{"slot-id", "1"}, {"library-version", "7"}, {"library-version", "1.8"}, {"type", "public"}} {
-		uri.AddPathAttribute(entry[0], entry[1])
+		err = uri.AddPathAttribute(entry[0], entry[1])
+		if err != nil {
+			t.Fatalf("Could not add path attribute: %s", err)
+		}
+
 		if err := uri.Validate(); err != nil {
 			t.Fatalf("uri validation should have succeeded for %s value '%s': %s", entry[0], entry[1], err)
 		}
+		uri.RemovePathAttribute(entry[0])
 	}
 }
 
@@ -266,5 +311,58 @@ func TestGetModuleRestricted(t *testing.T) {
 	_, err = uri.GetModule()
 	if err != nil {
 		t.Skipf("Is softhsm2 not installed? GetModule() failed: %s", err)
+	}
+}
+
+func TestGetPINUsingCommand(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skipf("This test is only supported on Linux")
+	}
+
+	uri, err := New()
+	if err != nil {
+		t.Fatalf("Could not create a Pkcs11URI object")
+		return
+	}
+
+	expectedpin := "1234"
+
+	script := "#!/bin/sh\n"
+	script += "echo -n " + expectedpin + "\n"
+	tmpfile := writeTempfile(t, script)
+	defer os.Remove(tmpfile.Name())
+
+	err = os.Chmod(tmpfile.Name(), 0700)
+	if err != nil {
+		t.Fatalf("Could not change mode bits on file: %s", err)
+	}
+
+	uristring := "pkcs11:?pin-source=|" + tmpfile.Name()
+	err = uri.Parse(uristring)
+	if err != nil {
+		t.Fatalf("Could not parse pkcs11 URI '%s': %s", uristring, err)
+	}
+
+	// this has to fail since we did not enable PIN commands
+	_, err = uri.GetPIN()
+	if err == nil {
+		t.Fatalf("PIN command was not enabled and should have failed")
+	}
+
+	// this time it has to fail again since the tmpfile is not in the allowed list
+	uri.SetEnableGetPINCommand(true, []string{tmpfile.Name() + "x"})
+	_, err = uri.GetPIN()
+	if err == nil {
+		t.Fatalf("Getting the PIN from a command should have failed")
+	}
+
+	// this time it must work
+	uri.SetEnableGetPINCommand(true, []string{tmpfile.Name()})
+	pin, err := uri.GetPIN()
+	if err != nil {
+		t.Fatalf("Could not get PIN using command: %s", err)
+	}
+	if pin != expectedpin {
+		t.Fatalf("Expected PIN '%s' but got '%s'", expectedpin, pin)
 	}
 }
