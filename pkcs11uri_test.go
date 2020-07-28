@@ -43,12 +43,12 @@ func TestParse1(t *testing.T) {
 	}
 
 	for _, attr := range []string{"id", "object", "token", "manufacturer"} {
-		if _, ok := uri.GetPathAttribute(attr); !ok {
+		if _, ok := uri.GetPathAttribute(attr, false); !ok {
 			t.Fatalf("Path attribute %s is not available", attr)
 		}
 	}
 	for _, attr := range []string{"module-path"} {
-		if _, ok := uri.GetQueryAttribute(attr); !ok {
+		if _, ok := uri.GetQueryAttribute(attr, false); !ok {
 			t.Fatalf("Query attribute %s is not available", attr)
 		}
 	}
@@ -235,15 +235,37 @@ func TestURIs(t *testing.T) {
 }
 
 func TestValidateEscapedAttrs(t *testing.T) {
-	input := [][]string{
+	type data struct {
+		uri    string
+		testp  []string // pair of attribute and expected value in path part (unescaped, pct-encoded)
+		testq  []string // pair of attribute and expected value in query part (unescaped, pct-encoded)
+		format bool     // whether to format the URI and compare against given uri (equal strings)
+	}
+	input := []data{
 		{
-			// pkcs11 URI
-			"pkcs11:token=Software%20PKCS%2311%20softtoken;manufacturer=Snake%20Oil,%20Inc.?pin-value=the-pin",
-			// attribute name and value to check
-			"token", "Software PKCS#11 softtoken",
+			uri:    "pkcs11:token=Software%20PKCS%2311%20softtoken;manufacturer=Snake%20Oil,%20Inc.?pin-value=the-pin",
+			testp:  []string{"token", "Software PKCS#11 softtoken", "Software%20PKCS%2311%20softtoken"},
+			format: false,
 		}, {
-			"pkcs11:token=My%20token%25%20created%20by%20Joe;library-version=3;id=%01%02%03%Ba%dd%Ca%fe%04%05%06",
-			"token", "My token% created by Joe",
+			uri:    "pkcs11:token=My%20token%25%20created%20by%20Joe;library-version=3;id=%01%02%03%Ba%dd%Ca%fe%04%05%06",
+			testp:  []string{"token", "My token% created by Joe", "My%20token%25%20created%20by%20Joe"},
+			format: false,
+		}, {
+			// test pk11-query-res-avail and pk11-path-res-avail special characters
+			uri:    "pkcs11:token=:[]@!$'()*+,=&?attr=:[]@!$'()*+,=/?",
+			testp:  []string{"token", ":[]@!$'()*+,=&", ":[]@!$'()*+,=&"},
+			testq:  []string{"attr", ":[]@!$'()*+,=/?", ":[]@!$'()*+,=/?"},
+			format: true,
+		}, {
+			// test (some) unnecessarily escaped characters
+			uri:    "pkcs11:token=%3a%5b%5d%40%21%24%27%28%29%2a%2b%2c%26%3d-%60%20%3c%3e%7b",
+			testp:  []string{"token", ":[]@!$'()*+,&=-` <>{", ":[]@!$'()*+,&=-%60%20%3C%3E%7B"},
+			format: false,
+		}, {
+			// test some non-printable characters that have to be escape;
+			uri:    "pkcs11:token=%00%01%02Hello%FF%FE",
+			testp:  []string{"token", "\x00\x01\x02Hello\xff\xfe", "%00%01%02Hello%FF%FE"},
+			format: true,
 		},
 	}
 
@@ -252,13 +274,44 @@ func TestValidateEscapedAttrs(t *testing.T) {
 		t.Fatalf("Could not create a Pkcs11URI object")
 	}
 	for _, data := range input {
-		err = uri.Parse(data[0])
+		err = uri.Parse(data.uri)
 		if err != nil {
-			t.Fatalf("Could not parse URI '%s': %s", data[0], err)
+			t.Fatalf("Could not parse URI '%s': %s", data.uri, err)
 		}
-		v, _ := uri.GetPathAttribute(data[1])
-		if v != data[2] {
-			t.Fatalf("Got unexpected attribute value '%s'; expected '%s'", v, data[2])
+		if len(data.testp[1]) > 0 {
+			v, _ := uri.GetPathAttribute(data.testp[0], false)
+			if v != data.testp[1] {
+				t.Fatalf("Got unexpected unescaped path attribute value '%s'; expected '%s'", v, data.testp[1])
+			}
+		}
+		if len(data.testp[2]) > 0 {
+			v, _ := uri.GetPathAttribute(data.testp[0], true)
+			if v != data.testp[2] {
+				t.Fatalf("Got unexpected pct-encoded path attribute value '%s'; expected '%s'", v, data.testp[2])
+			}
+		}
+		if len(data.testq) > 0 {
+			if len(data.testq[1]) > 0 {
+				v, _ := uri.GetQueryAttribute(data.testq[0], false)
+				if v != data.testq[1] {
+					t.Fatalf("Got unexpected unescaped query attribute value '%s'; expected '%s'", v, data.testq[1])
+				}
+			}
+			if len(data.testq[2]) > 0 {
+				v, _ := uri.GetQueryAttribute(data.testq[0], true)
+				if v != data.testq[2] {
+					t.Fatalf("Got unexpected pct-encoded query attribute value '%s'; expected '%s'", v, data.testq[2])
+				}
+			}
+		}
+		if data.format {
+			encoded, err := uri.Format()
+			if err != nil {
+				t.Fatalf("Could not format URI '%s': %s", data.uri, err)
+			}
+			if encoded != data.uri {
+				t.Fatalf("Formatted URI is different than expected: '%s' vs. '%s'", encoded, data.uri)
+			}
 		}
 	}
 }

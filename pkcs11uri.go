@@ -81,7 +81,7 @@ func escape(s string, isPath bool) string {
 			switch c {
 			case '-', '.', '_', '~': // unreserved per RFC 3986 sec. 2.3
 				res[j] = c
-			case ':', '[', ']', '@', '!', '$', '`', '(', ')', '*', '+', ',', '=':
+			case ':', '[', ']', '@', '!', '$', '\'', '(', ')', '*', '+', ',', '=':
 				res[j] = c
 			default:
 				res[j] = '%'
@@ -104,7 +104,7 @@ func New() (Pkcs11URI, error) {
 }
 
 func (uri *Pkcs11URI) setAttribute(attrMap map[string]string, name, value string) error {
-	v, err := url.QueryUnescape(value)
+	v, err := url.PathUnescape(value)
 	if err != nil {
 		return err
 	}
@@ -112,9 +112,13 @@ func (uri *Pkcs11URI) setAttribute(attrMap map[string]string, name, value string
 	return nil
 }
 
-// GetPathAttribute returns the value of a path attribute in unescaped form
-func (uri *Pkcs11URI) GetPathAttribute(name string) (string, bool) {
+// GetPathAttribute returns the value of a path attribute in unescaped form or
+// pct-encoded form
+func (uri *Pkcs11URI) GetPathAttribute(name string, pctencode bool) (string, bool) {
 	v, ok := uri.pathAttributes[name]
+	if ok && pctencode {
+		v = escape(v, true)
+	}
 	return v, ok
 }
 
@@ -138,9 +142,13 @@ func (uri *Pkcs11URI) RemovePathAttribute(name string) {
 	delete(uri.pathAttributes, name)
 }
 
-// GetQueryAttribute returns the value of a query attribute in unescaped form
-func (uri *Pkcs11URI) GetQueryAttribute(name string) (string, bool) {
+// GetQueryAttribute returns the value of a query attribute in unescaped or
+// pct-encoded form
+func (uri *Pkcs11URI) GetQueryAttribute(name string, pctencode bool) (string, bool) {
 	v, ok := uri.queryAttributes[name]
+	if ok && pctencode {
+		v = escape(v, false)
+	}
 	return v, ok
 }
 
@@ -274,10 +282,8 @@ func (uri *Pkcs11URI) Parse(uristring string) error {
 	if !strings.HasPrefix(uristring, "pkcs11:") {
 		return errors.New("Malformed pkcs11 URI: missing pcks11: prefix")
 	}
-	parts := strings.Split(uristring[7:], "?")
-	if len(parts) > 2 {
-		return errors.New("Malformed pkcs11 URI: too many query parts")
-	}
+
+	parts := strings.SplitN(uristring[7:], "?", 2)
 
 	uri.pathAttributes = make(map[string]string)
 	uri.queryAttributes = make(map[string]string)
@@ -285,7 +291,7 @@ func (uri *Pkcs11URI) Parse(uristring string) error {
 	if len(parts[0]) > 0 {
 		/* parse path part */
 		for _, part := range strings.Split(parts[0], ";") {
-			p := strings.Split(part, "=")
+			p := strings.SplitN(part, "=", 2)
 			if len(p) != 2 {
 				return errors.New("Malformed pkcs11 URI: malformed path attribute")
 			}
@@ -298,7 +304,7 @@ func (uri *Pkcs11URI) Parse(uristring string) error {
 	if len(parts) == 2 {
 		/* parse query part */
 		for _, part := range strings.Split(parts[1], "&") {
-			p := strings.Split(part, "=")
+			p := strings.SplitN(part, "=", 2)
 			if len(p) != 2 {
 				return errors.New("Malformed pkcs11 URI: malformed query attribute")
 			}
