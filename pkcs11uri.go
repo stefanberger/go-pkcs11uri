@@ -311,7 +311,7 @@ func (uri *Pkcs11URI) isAllowedPath(path string) bool {
 	return false
 }
 
-// GetModule returns the module to use, an empty string if no module was specified in the URI
+// GetModule returns the module to use or an error in case no module could be found.
 // First the module-path is checked for whether it holds an absolute that can be read
 // by the current user. If this is the case the module is returned. Otherwise either the module-path
 // is used or the user-provided module path is used to match a module containing what is set in the
@@ -333,7 +333,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 			return "", fmt.Errorf("module-path '%s' points to an invalid file type", v)
 		}
 		// v is a directory
-		searchdirs = append(uri.GetModuleDirectories(), v)
+		searchdirs = []string{v}
 	} else {
 		searchdirs = uri.GetModuleDirectories()
 	}
