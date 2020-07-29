@@ -17,13 +17,11 @@
 package pkcs11uri
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -40,10 +38,6 @@ type Pkcs11URI struct {
 	moduleDirectories []string
 	// file paths of allowed pkcs11 modules
 	allowedModulePaths []string
-	// whether GetPIN() is allowed to execute an (arbitrary) program via "|<absolute commmand path>"
-	enableGetPINCommand bool
-	// file paths of allowed PIN commands
-	allowedPINCommandPaths []string
 }
 
 // upper character hex digits needed for pct-encoding
@@ -214,48 +208,12 @@ func (uri *Pkcs11URI) Validate() error {
 	return nil
 }
 
-// runGetPINCommand executes the command described by cmdstring after checking whether
-// the user enabled PIN Commands, whether the command has an absolute path, and whether
-// the command is allowed to run following the policy.
-func (uri *Pkcs11URI) runGetPINCommand(cmdstring string) (string, error) {
-	if !uri.enableGetPINCommand {
-		return "", fmt.Errorf("Running PIN command is disabled")
-	}
-	if !filepath.IsAbs(cmdstring) {
-		return "", fmt.Errorf("PIN command '%s' is not an absolute path", cmdstring)
-	}
-	if !uri.isAllowedPath(cmdstring, uri.allowedPINCommandPaths) {
-		return "", fmt.Errorf("PIN command '%s' is not allowed to run", cmdstring)
-	}
-
-	cmd := exec.Command(cmdstring)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	return out.String(), nil
-}
-
-// SetEnableGetPINCommand enables or disable the execution of a command to get the PIN.
-// The 2nd parameter allows to set a list of directories (entries must and in os.PathSeparator)
-// and files from where PIN commands are allowed to run. Running PIN commands is disabled
-// by default.
-func (uri *Pkcs11URI) SetEnableGetPINCommand(enable bool, allowedPINCommandPaths []string) {
-	uri.enableGetPINCommand = enable
-	uri.allowedPINCommandPaths = allowedPINCommandPaths
-}
-
 // GetPIN gets the PIN from either the pin-value or pin-source attribute
 func (uri *Pkcs11URI) GetPIN() (string, error) {
 	if v, ok := uri.queryAttributes["pin-value"]; ok {
 		return v, nil
 	}
 	if v, ok := uri.queryAttributes["pin-source"]; ok {
-		if v[0] == '|' {
-			return uri.runGetPINCommand(v[1:])
-		}
 		pinuri, err := url.ParseRequestURI(v)
 		if err != nil {
 			return "", fmt.Errorf("Could not parse pin-source: %s ", err)
