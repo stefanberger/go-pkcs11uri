@@ -38,6 +38,9 @@ type Pkcs11URI struct {
 	moduleDirectories []string
 	// file paths of allowed pkcs11 modules
 	allowedModulePaths []string
+	// A map of environment variables needed by the pkcs11 module using this URI.
+	// This map is not needed by this implementation but is there for convenience.
+	env map[string]string
 }
 
 // upper character hex digits needed for pct-encoding
@@ -90,11 +93,12 @@ func escape(s string, isPath bool) string {
 }
 
 // New creates a new Pkcs11URI object
-func New() (Pkcs11URI, error) {
-	return Pkcs11URI{
+func New() *Pkcs11URI {
+	return &Pkcs11URI{
 		pathAttributes:  make(map[string]string),
 		queryAttributes: make(map[string]string),
-	}, nil
+		env:             make(map[string]string),
+	}
 }
 
 func (uri *Pkcs11URI) setAttribute(attrMap map[string]string, name, value string) error {
@@ -134,6 +138,21 @@ func (uri *Pkcs11URI) AddPathAttribute(name, value string) error {
 // RemovePathAttribute removes a path attribute
 func (uri *Pkcs11URI) RemovePathAttribute(name string) {
 	delete(uri.pathAttributes, name)
+}
+
+// AddEnv adds an environment variable for the pkcs11 module
+func (uri *Pkcs11URI) AddEnv(name, value string) {
+	uri.env[name] = value
+}
+
+// SetEnvMap sets the environment variables for the pkcs11 module
+func (uri *Pkcs11URI) SetEnvMap(env map[string]string) {
+	uri.env = env
+}
+
+// GetEnvMap returns the map of environment variables
+func (uri *Pkcs11URI) GetEnvMap() map[string]string {
+	return uri.env
 }
 
 // GetQueryAttribute returns the value of a query attribute in unescaped or
