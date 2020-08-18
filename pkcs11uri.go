@@ -90,11 +90,11 @@ func escape(s string, isPath bool) string {
 }
 
 // New creates a new Pkcs11URI object
-func New() (Pkcs11URI, error) {
-	return Pkcs11URI{
+func New() *Pkcs11URI {
+	return &Pkcs11URI{
 		pathAttributes:  make(map[string]string),
 		queryAttributes: make(map[string]string),
-	}, nil
+	}
 }
 
 func (uri *Pkcs11URI) setAttribute(attrMap map[string]string, name, value string) error {

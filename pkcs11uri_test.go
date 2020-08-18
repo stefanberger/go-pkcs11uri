@@ -29,13 +29,10 @@ var modulePaths = []string{
 }
 
 func TestParse1(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-	}
+	uri := New()
 
 	original := "pkcs11:id=%02;object=SIGN%20pubkey;token=SSH%20key;manufacturer=piv_II?module-path=/usr/lib64/pkcs11/opensc-pkcs11.so"
-	err = uri.Parse(original)
+	err := uri.Parse(original)
 
 	if err != nil {
 		t.Fatalf("Could not parse URI: %s", err)
@@ -58,7 +55,7 @@ func TestParse1(t *testing.T) {
 	}
 }
 
-func verifyURI(t *testing.T, uri Pkcs11URI, expecteduri string) {
+func verifyURI(t *testing.T, uri *Pkcs11URI, expecteduri string) {
 	encoded, err := uri.Format()
 	if err != nil {
 		t.Fatalf("Could not format the uri: %s", err)
@@ -68,7 +65,7 @@ func verifyURI(t *testing.T, uri Pkcs11URI, expecteduri string) {
 	}
 }
 
-func verifyPIN(t *testing.T, uri Pkcs11URI, expectedpin string) {
+func verifyPIN(t *testing.T, uri *Pkcs11URI, expectedpin string) {
 	pin, err := uri.GetPIN()
 	if err != nil {
 		t.Fatalf("Could not get PIN: %s", err)
@@ -79,13 +76,10 @@ func verifyPIN(t *testing.T, uri Pkcs11URI, expectedpin string) {
 }
 
 func TestConstruct1(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-	}
+	uri := New()
 	expecteduri := "pkcs11:id=%66%6F%6F"
 
-	err = uri.AddPathAttribute("id", "%66oo")
+	err := uri.AddPathAttribute("id", "%66oo")
 	if err != nil {
 		t.Fatalf("Could not add path attribute: %s", err)
 	}
@@ -119,19 +113,14 @@ func writeTempfile(t *testing.T, value string) *os.File {
 }
 
 func TestPinSource(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
-
+	uri := New()
 	expectedpin := "4321"
 
 	tmpfile := writeTempfile(t, expectedpin)
 	defer os.Remove(tmpfile.Name())
 
 	expecteduri := "pkcs11:id=%66%6F%6F?pin-source=file:" + tmpfile.Name()
-	err = uri.AddPathAttribute("id", "foo")
+	err := uri.AddPathAttribute("id", "foo")
 	if err != nil {
 		t.Fatalf("Could not add path attribute: %s", err)
 	}
@@ -156,14 +145,10 @@ func TestPinSource(t *testing.T) {
 }
 
 func TestBadInput(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
+	uri := New()
 
 	for _, entry := range [][]string{{"slot-id", "foo"}, {"library-version", "foo"}, {"library-version", "1.bar"}, {"type", "fobbar"}} {
-		err = uri.AddPathAttribute(entry[0], entry[1])
+		err := uri.AddPathAttribute(entry[0], entry[1])
 		if err != nil {
 			t.Fatalf("Could not add path attribute: %s", err)
 		}
@@ -176,14 +161,10 @@ func TestBadInput(t *testing.T) {
 }
 
 func TestGoodInput(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
+	uri := New()
 
 	for _, entry := range [][]string{{"slot-id", "1"}, {"library-version", "7"}, {"library-version", "1.8"}, {"type", "public"}} {
-		err = uri.AddPathAttribute(entry[0], entry[1])
+		err := uri.AddPathAttribute(entry[0], entry[1])
 		if err != nil {
 			t.Fatalf("Could not add path attribute: %s", err)
 		}
@@ -196,11 +177,7 @@ func TestGoodInput(t *testing.T) {
 }
 
 func TestURIs(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
+	uri := New()
 	uris := []string{
 		"pkcs11:",
 		"pkcs11:object=my-pubkey;type=public",
@@ -217,7 +194,7 @@ func TestURIs(t *testing.T) {
 		"pkcs11:token=my-token;object=my-certificate;type=cert;vendor-aaa=value-a?pin-source=file:/etc/token_pin&vendor-bbb=value-b",
 	}
 	for _, uristring := range uris {
-		err = uri.Parse(uristring)
+		err := uri.Parse(uristring)
 		if err != nil {
 			t.Fatalf("Could not parse URI '%s': %s", uristring, err)
 		}
@@ -268,12 +245,9 @@ func TestValidateEscapedAttrs(t *testing.T) {
 		},
 	}
 
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-	}
+	uri := New()
 	for _, data := range input {
-		err = uri.Parse(data.uri)
+		err := uri.Parse(data.uri)
 		if err != nil {
 			t.Fatalf("Could not parse URI '%s': %s", data.uri, err)
 		}
@@ -317,15 +291,11 @@ func TestValidateEscapedAttrs(t *testing.T) {
 
 // This test requires SoftHSM to be installed, will warn otherwise
 func TestGetModule(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
+	uri := New()
 	uri.SetModuleDirectories(modulePaths)
 
 	uristring := "pkcs11:?module-name=softhsm2"
-	err = uri.Parse(uristring)
+	err := uri.Parse(uristring)
 	if err != nil {
 		t.Fatalf("Could not parse pkcs11 URI '%s': %s", uristring, err)
 	}
@@ -338,15 +308,11 @@ func TestGetModule(t *testing.T) {
 
 // This test requires SoftHSM to be installed, will warn otherwise
 func TestGetModuleRestricted(t *testing.T) {
-	uri, err := New()
-	if err != nil {
-		t.Fatalf("Could not create a Pkcs11URI object")
-		return
-	}
+	uri := New()
 	uri.SetModuleDirectories(modulePaths)
 
 	uristring := "pkcs11:?module-name=softhsm2"
-	err = uri.Parse(uristring)
+	err := uri.Parse(uristring)
 	if err != nil {
 		t.Fatalf("Could not parse pkcs11 URI '%s': %s", uristring, err)
 	}
