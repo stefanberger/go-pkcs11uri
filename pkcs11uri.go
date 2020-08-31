@@ -309,7 +309,11 @@ func formatAttributes(attrMap map[string]string, ispath bool) string {
 			}
 		}
 		if len(res) > 0 {
-			res += ";"
+			if ispath {
+				res += ";"
+			} else {
+				res += "&"
+			}
 		}
 		res += key + "=" + value
 	}
