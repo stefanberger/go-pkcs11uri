@@ -66,6 +66,9 @@ func verifyURI(t *testing.T, uri *Pkcs11URI, expecteduri string) {
 }
 
 func verifyPIN(t *testing.T, uri *Pkcs11URI, expectedpin string) {
+	if !uri.HasPIN() {
+		t.Fatalf("HasPIN indicated that the URI does not have a PIN")
+	}
 	pin, err := uri.GetPIN()
 	if err != nil {
 		t.Fatalf("Could not get PIN: %s", err)
