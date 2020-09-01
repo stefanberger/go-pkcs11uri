@@ -227,7 +227,20 @@ func (uri *Pkcs11URI) Validate() error {
 	return nil
 }
 
-// GetPIN gets the PIN from either the pin-value or pin-source attribute
+// HasPIN allows the user to check whether a PIN has been provided either by the pin-value or the pin-source
+// attributes. It should be called before GetPIN(), which may still fail getting the PIN from a file for example.
+func (uri *Pkcs11URI) HasPIN() bool {
+	_, ok := uri.queryAttributes["pin-value"]
+	if ok {
+		return true
+	}
+	_, ok = uri.queryAttributes["pin-source"]
+	return ok
+}
+
+// GetPIN gets the PIN from either the pin-value or pin-source attribute; a user may want to call HasPIN()
+// before calling this function to determine whether a PIN has been provided at all so that an error code
+// returned by this function indicates that the PIN value could not be retrieved.
 func (uri *Pkcs11URI) GetPIN() (string, error) {
 	if v, ok := uri.queryAttributes["pin-value"]; ok {
 		return v, nil
