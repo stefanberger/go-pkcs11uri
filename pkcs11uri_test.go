@@ -24,8 +24,9 @@ import (
 )
 
 var modulePaths = []string{
-	"/usr/lib64/pkcs11/", // Fedora
-	"/usr/lib/softhsm/",  // Ubuntu
+	"/usr/lib64/pkcs11/", // Fedora, RHEL, openSUSE
+	"/usr/lib/pkcs11/",   // Fedora 32 bit, ArchLinux
+	"/usr/lib/softhsm/",  // Ubuntu, Debian, Alpine
 }
 
 func TestParse1(t *testing.T) {
