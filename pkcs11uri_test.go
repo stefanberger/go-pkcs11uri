@@ -297,6 +297,7 @@ func TestValidateEscapedAttrs(t *testing.T) {
 func TestGetModule(t *testing.T) {
 	uri := New()
 	uri.SetModuleDirectories(modulePaths)
+	uri.SetAllowAnyModule(true)
 
 	uristring := "pkcs11:?module-name=softhsm2"
 	err := uri.Parse(uristring)
