@@ -403,9 +403,12 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("module-path '%s' is not accessible", v)
 		}
-		if err == nil && info.Mode().IsRegular() && uri.isAllowedPath(v, uri.allowedModulePaths) {
+		if err == nil && info.Mode().IsRegular() {
 			// it's a file
-			return v, nil
+			if uri.isAllowedPath(v, uri.allowedModulePaths) {
+				return v, nil
+			}
+			return "", fmt.Errorf("module-path '%s' is not allowed by policy", v)
 		}
 		if !info.IsDir() {
 			return "", fmt.Errorf("module-path '%s' points to an invalid file type", v)
@@ -442,6 +445,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 				if uri.isAllowedPath(f, uri.allowedModulePaths) {
 					return f, nil
 				}
+				return "", fmt.Errorf("module '%s' is not allowed by policy", f)
 			}
 		}
 	}
