@@ -78,27 +78,59 @@ func verifyPIN(t *testing.T, uri *Pkcs11URI, expectedpin string) {
 	}
 }
 
-func TestConstruct1(t *testing.T) {
-	uri := New()
-	expecteduri := "pkcs11:id=%66%6F%6F"
-
-	err := uri.AddPathAttribute("id", "%66oo")
-	if err != nil {
-		t.Fatalf("Could not add path attribute: %s", err)
-	}
-
+func testConstruct(t *testing.T, uri *Pkcs11URI, expecteduri string) {
 	verifyURI(t, uri, expecteduri)
 
 	expectedpin := "1234"
 	expecteduri += fmt.Sprintf("?pin-value=%s", expectedpin)
 
-	err = uri.AddQueryAttribute("pin-value", expectedpin)
+	err := uri.AddQueryAttribute("pin-value", expectedpin)
 	if err != nil {
 		t.Fatalf("Could not add query attribute: %s", err)
 	}
 
 	verifyURI(t, uri, expecteduri)
 	verifyPIN(t, uri, expectedpin)
+}
+
+func TestConstruct1(t *testing.T) {
+	uri := New()
+
+	err := uri.AddPathAttribute("id", "%66oo")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	testConstruct(t, uri, "pkcs11:id=%66%6F%6F")
+}
+
+func TestConstruct2(t *testing.T) {
+	uri := New()
+
+	err := uri.AddPathAttributeUnencoded("id", []byte{0x66,0x6f,0x6f})
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	testConstruct(t, uri, "pkcs11:id=%66%6F%6F")
+}
+
+func TestConstruct3(t *testing.T) {
+	uri := New()
+
+	err := uri.AddPathAttribute("slot-id", "12345")
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	testConstruct(t, uri, "pkcs11:slot-id=12345")
+}
+
+func TestConstruct4(t *testing.T) {
+	uri := New()
+
+	err := uri.AddPathAttributeUnencoded("slot-id", []byte("12345"))
+	if err != nil {
+		t.Fatalf("Could not add path attribute: %s", err)
+	}
+	testConstruct(t, uri, "pkcs11:slot-id=12345")
 }
 
 func writeTempfile(t *testing.T, value string) *os.File {

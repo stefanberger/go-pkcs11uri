@@ -127,6 +127,12 @@ func (uri *Pkcs11URI) SetPathAttribute(name, value string) error {
 	return uri.setAttribute(uri.pathAttributes, name, value)
 }
 
+// SetPathAttributeUnencoded sets the value for a path attribute given as byte[].
+// The value must not have been pct-encoded already.
+func (uri *Pkcs11URI) SetPathAttributeUnencoded(name string, value []byte) {
+	uri.pathAttributes[name] = string(value)
+}
+
 // AddPathAttribute adds a path attribute; it returns an error if an attribute with the same
 // name already existed or if the given value cannot be pct-unescaped
 func (uri *Pkcs11URI) AddPathAttribute(name, value string) error {
@@ -134,6 +140,16 @@ func (uri *Pkcs11URI) AddPathAttribute(name, value string) error {
 		return errors.New("duplicate path attribute")
 	}
 	return uri.SetPathAttribute(name, value)
+}
+
+// AddPathAttributeUnencoded adds a path attribute given as byte[] which must not already be pct-encoded;
+// it returns an error if an attribute with the same name already existed
+func (uri *Pkcs11URI) AddPathAttributeUnencoded(name string, value []byte) error {
+	if _, ok := uri.pathAttributes[name]; ok {
+		return errors.New("duplicate path attribute")
+	}
+	uri.SetPathAttributeUnencoded(name, value)
+	return nil
 }
 
 // RemovePathAttribute removes a path attribute
