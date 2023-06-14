@@ -19,7 +19,6 @@ package pkcs11uri
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -257,7 +256,7 @@ func (uri *Pkcs11URI) GetPIN() (string, error) {
 			if !filepath.IsAbs(pinuri.Path) {
 				return "", fmt.Errorf("PIN URI path '%s' is not absolute", pinuri.Path)
 			}
-			pin, err := ioutil.ReadFile(pinuri.Path)
+			pin, err := os.ReadFile(pinuri.Path)
 			if err != nil {
 				return "", fmt.Errorf("Could not open PIN file: %s", err)
 			}
@@ -426,7 +425,7 @@ func (uri *Pkcs11URI) GetModule() (string, error) {
 	moduleName = strings.ToLower(moduleName)
 
 	for _, dir := range searchdirs {
-		files, err := ioutil.ReadDir(dir)
+		files, err := os.ReadDir(dir)
 		if err != nil {
 			continue
 		}

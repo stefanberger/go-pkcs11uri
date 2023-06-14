@@ -18,7 +18,6 @@ package pkcs11uri
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -103,7 +102,7 @@ func TestConstruct1(t *testing.T) {
 }
 
 func writeTempfile(t *testing.T, value string) *os.File {
-	tmpfile, err := ioutil.TempFile("", "mypin")
+	tmpfile, err := os.CreateTemp("", "mypin")
 	if err != nil {
 		t.Fatalf("Coult not create temporary file: %s", err)
 	}
