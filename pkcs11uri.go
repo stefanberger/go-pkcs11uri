@@ -188,6 +188,12 @@ func (uri *Pkcs11URI) SetQueryAttribute(name, value string) error {
 	return uri.setAttribute(uri.queryAttributes, name, value)
 }
 
+// SetQueryAttributeUnencoded sets the value for a quiery attribute given as byte[].
+// The value must not have been pct-encoded already.
+func (uri *Pkcs11URI) SetQueryAttributeUnencoded(name string, value []byte) {
+	uri.queryAttributes[name] = string(value)
+}
+
 // AddQueryAttribute adds a query attribute; it returns an error if an attribute with the same
 // name already existed or if the given value cannot be pct-unescaped
 func (uri *Pkcs11URI) AddQueryAttribute(name, value string) error {
@@ -195,6 +201,16 @@ func (uri *Pkcs11URI) AddQueryAttribute(name, value string) error {
 		return errors.New("duplicate query attribute")
 	}
 	return uri.SetQueryAttribute(name, value)
+}
+
+// AddQueryAttributeUnencoded adds a query attribute given as byte[] which must not already be pct-encoded;
+// it returns an error if an attribute with the same name already existed
+func (uri *Pkcs11URI) AddQueryAttributeUnencoded(name string, value []byte) error {
+	if _, ok := uri.queryAttributes[name]; ok {
+		return errors.New("duplicate query attribute")
+	}
+	uri.SetQueryAttributeUnencoded(name, value)
+	return nil
 }
 
 // RemoveQueryAttribute removes a path attribute
