@@ -17,7 +17,6 @@
 package pkcs11uri
 
 import (
-	"fmt"
 	"os"
 	"testing"
 )
@@ -74,19 +73,28 @@ func verifyPIN(t *testing.T, uri *Pkcs11URI, expectedpin string) {
 		t.Fatalf("Could not get PIN: %s", err)
 	}
 	if pin != expectedpin {
-		t.Fatalf("Did not get expected PIN value of '1234' but '%s'", pin)
+		t.Fatalf("Did not get expected PIN value of '%s' but '%s'", expectedpin, pin)
 	}
 }
 
 func testConstruct(t *testing.T, uri *Pkcs11URI, expecteduri string) {
 	verifyURI(t, uri, expecteduri)
 
-	expectedpin := "1234"
-	expecteduri += fmt.Sprintf("?pin-value=%s", expectedpin)
+	expectedpin := "the pin"
+	expecteduri += "?pin-value=the%20pin"
 
-	err := uri.AddQueryAttribute("pin-value", expectedpin)
+	err := uri.AddQueryAttribute("pin-value", "the%20pin")
 	if err != nil {
 		t.Fatalf("Could not add query attribute: %s", err)
+	}
+
+	verifyURI(t, uri, expecteduri)
+	verifyPIN(t, uri, expectedpin)
+
+	uri.RemoveQueryAttribute("pin-value")
+	err = uri.AddQueryAttributeUnencoded("pin-value", []byte(expectedpin))
+	if err != nil {
+		t.Fatalf("Could not add unencoded query attribute: %s", err)
 	}
 
 	verifyURI(t, uri, expecteduri)
